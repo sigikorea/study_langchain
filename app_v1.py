@@ -170,18 +170,17 @@ if prompt := st.chat_input("메시지를 입력하세요..."):
     with st.chat_message("user"):
         st.write(prompt)
     current_conv["messages"].append({"role": "user", "content": prompt})
-
+    print(current_conv)
+    
     update_title(current_conv, prompt)
 
     lc_messages = [SystemMessage(content=get_system_prompt(selected_model))]
-    print(lc_messages)
+
     for msg in current_conv["messages"]:
         if msg["role"] == "user":
             lc_messages.append(HumanMessage(content=msg["content"]))
-            print(lc_messages)
         else:
             lc_messages.append(AIMessage(content=msg["content"]))
-            print(lc_messages)
 
     with st.chat_message("assistant"):
         with st.spinner("생각 중..."):
