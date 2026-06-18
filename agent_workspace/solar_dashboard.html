@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>태양광 발전량 분석 대시보드</title>
+  <style>
+    :root {
+      --bg: #08111f;
+      --panel: rgba(15, 23, 42, 0.86);
+      --panel-2: rgba(30, 41, 59, 0.86);
+      --line: rgba(148, 163, 184, 0.18);
+      --text: #e2e8f0;
+      --muted: #94a3b8;
+      --accent: #fbbf24;
+      --accent-2: #38bdf8;
+      --good: #22c55e;
+      --warn: #f97316;
+      --bad: #ef4444;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(circle at top left, rgba(251,191,36,0.16), transparent 30%),
+        radial-gradient(circle at top right, rgba(56,189,248,0.18), transparent 25%),
+        linear-gradient(180deg, #050b14 0%, #08111f 100%);
+      min-height: 100vh;
+    }
+    .container {
+      width: min(1400px, 94vw);
+      margin: 0 auto;
+      padding: 28px 0 40px;
+    }
+    .hero {
+      display: grid;
+      grid-template-columns: 1.3fr 0.7fr;
+      gap: 18px;
+      margin-bottom: 18px;
+    }
+    .card {
+      background: linear-gradient(180deg, rgba(15,23,42,0.92), rgba(17,24,39,0.92));
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      box-shadow: 0 18px 50px rgba(0,0,0,0.28);
+      backdrop-filter: blur(8px);
+    }
+    .hero-main, .hero-side, .section, .metric, .chart, .table-wrap { padding: 22px; }
+    h1, h2, h3, p { margin: 0; }
+    .title {
+      font-size: clamp(28px, 3vw, 44px);
+      line-height: 1.1;
+      margin-bottom: 12px;
+    }
+    .subtitle { color: var(--muted); line-height: 1.6; max-width: 72ch; }
+    .badge-row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 18px; }
+    .badge {
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(255,255,255,0.08);
+      font-size: 13px;
+      color: #f8fafc;
+    }
+    .hero-side {
+      display: grid;
+      gap: 14px;
+      align-content: start;
+    }
+    .metric-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+      margin: 18px 0;
+    }
+    .metric h3 { font-size: 14px; color: var(--muted); margin-bottom: 12px; font-weight: 600; }
+    .metric .value { font-size: 28px; font-weight: 800; letter-spacing: -0.02em; }
+    .metric .unit { font-size: 13px; color: var(--muted); margin-left: 4px; }
+    .metric .delta { margin-top: 10px; font-size: 13px; color: #cbd5e1; }
+    .delta.up { color: #86efac; }
+    .delta.down { color: #fca5a5; }
+    .dashboard {
+      display: grid;
+      grid-template-columns: 2fr 1fr;
+      gap: 18px;
+      margin-top: 18px;
+    }
+    .section-title {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+    .section-title .small { color: var(--muted); font-size: 13px; }
+    .chart { min-height: 420px; }
+    .chart-box {
+      margin-top: 10px;
+      position: relative;
+      height: 320px;
+      border-radius: 16px;
+      background: rgba(2,6,23,0.45);
+      border: 1px solid var(--line);
+      padding: 16px;
+    }
+    canvas { width: 100%; height: 100%; display: block; }
+    .list {
+      display: grid;
+      gap: 12px;
+      margin-top: 8px;
+    }
+    .list-item {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 14px 16px;
+      border-radius: 14px;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.06);
+    }
+    .list-item span { color: var(--muted); font-size: 13px; display: block; margin-top: 4px; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 8px;
+      font-size: 14px;
+    }
+    th, td {
+      padding: 12px 10px;
+      border-bottom: 1px solid rgba(148,163,184,0.16);
+      text-align: left;
+    }
+    th { color: #cbd5e1; font-weight: 700; }
+    td { color: #e2e8f0; }
+    .bar {
+      height: 10px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.08);
+      overflow: hidden;
+    }
+    .bar > div { height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--accent), #f59e0b); }
+    .footer-note { margin-top: 14px; color: var(--muted); font-size: 13px; }
+    @media (max-width: 1100px) {
+      .hero, .dashboard, .metric-grid { grid-template-columns: 1fr; }
+      .chart { min-height: 380px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <section class="hero">
+      <div class="card hero-main">
+        <h1 class="title">태양광 발전량 분석 대시보드</h1>
+        <p class="subtitle">
+          아래 데이터는 가상의 일별 태양광 발전량 데이터입니다. 계절성, 일사량, 기상 요인에 따른 변동을 반영해
+          월별 추세, 성능 지표, 이상 구간을 시각화했습니다.
+        </p>
+        <div class="badge-row">
+          <div class="badge">기간: 2025.01 ~ 2025.12</div>
+          <div class="badge">데이터: 가상 시뮬레이션</div>
+          <div class="badge">단위: kWh</div>
+          <div class="badge">분석: 추세 / 피크 / 변동성</div>
+        </div>
+      </div>
+      <div class="card hero-side">
+        <div>
+          <h3 style="margin-bottom:8px;">핵심 요약</h3>
+          <p class="subtitle" style="font-size:14px;">연간 생산량, 최대 생산일, 평균 효율을 한눈에 확인할 수 있습니다.</p>
+        </div>
+        <div class="list-item"><div><strong>연간 총 발전량</strong><span>가상 누적 생산량</span></div><strong>182,460 kWh</strong></div>
+        <div class="list-item"><div><strong>최고 생산일</strong><span>최대 일일 발전량</span></div><strong>896 kWh</strong></div>
+        <div class="list-item"><div><strong>평균 일일 발전량</strong><span>365일 기준</span></div><strong>500 kWh</strong></div>
+      </div>
+    </section>
+
+    <section class="metric-grid">
+      <div class="card metric">
+        <h3>평균 일사량 지수</h3>
+        <div class="value">5.8<span class="unit">/10</span></div>
+        <div class="delta up">전월 대비 +0.4</div>
+      </div>
+      <div class="card metric">
+        <h3>설비 가동률</h3>
+        <div class="value">94.2<span class="unit">%</span></div>
+        <div class="delta up">목표 대비 +1.7%</div>
+      </div>
+      <div class="card metric">
+        <h3>변동성(표준편차)</h3>
+        <div class="value">126<span class="unit">kWh</span></div>
+        <div class="delta down">우천일 영향 증가</div>
+      </div>
+      <div class="card metric">
+        <h3>저효율 경보일</h3>
+        <div class="value">18<span class="unit">일</span></div>
+        <div class="delta down">일평균 대비 20% 이하</div>
+      </div>
+    </section>
+
+    <section class="dashboard">
+      <div class="card chart">
+        <div class="section-title">
+          <div>
+            <h2>월별 발전량 추이</h2>
+            <div class="small">계절별 발전량 변화와 여름철 피크를 확인</div>
+          </div>
+          <div class="small">단위: kWh</div>
+        </div>
+        <div class="chart-box"><canvas id="lineChart" width="900" height="320"></canvas></div>
+      </div>
+      <div class="card section">
+        <div class="section-title">
+          <div>
+            <h2>분석 포인트</h2>
+            <div class="small">가상 데이터 기반 인사이트</div>
+          </div>
+        </div>
+        <div class="list">
+          <div class="list-item">
+            <div><strong>최대 생산 구간</strong><span>6~8월: 일사량 증가로 생산량 최고치</span></div>
+            <strong style="color:var(--accent)">+32%</strong>
+          </div>
+          <div class="list-item">
+            <div><strong>최저 생산 구간</strong><span>1~2월: 일조시간 부족 및 기온 영향</span></div>
+            <strong style="color:#93c5fd">-21%</strong>
+          </div>
+          <div class="list-item">
+            <div><strong>안정 구간</strong><span>4~5월, 9~10월: 변동성이 비교적 낮음</span></div>
+            <strong style="color:#86efac">양호</strong>
+          </div>
+          <div class="list-item">
+            <div><strong>이상치</strong><span>장마철과 폭설 시점에 급격한 하락 발생</span></div>
+            <strong style="color:#fca5a5">주의</strong>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="dashboard">
+      <div class="card section">
+        <div class="section-title">
+          <div>
+            <h2>월별 상세 데이터</h2>
+            <div class="small">예시용 가상 데이터</div>
+          </div>
+        </div>
+        <table>
+          <thead>
+            <tr><th>월</th><th>발전량</th><th>전월 대비</th><th>달성률</th></tr>
+          </thead>
+          <tbody id="monthlyTable"></tbody>
+        </table>
+      </div>
+      <div class="card section">
+        <div class="section-title">
+          <div>
+            <h2>효율 지표</h2>
+            <div class="small">월별 목표 대비 실적</div>
+          </div>
+        </div>
+        <div id="efficiencyBars" class="list"></div>
+        <div class="footer-note">※ 본 대시보드는 가상의 데이터를 사용한 예시입니다.</div>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    const monthlyData = [
+      { month: '1월', value: 11200, target: 13000 },
+      { month: '2월', value: 11950, target: 13000 },
+      { month: '3월', value: 13850, target: 14000 },
+      { month: '4월', value: 15240, target: 15000 },
+      { month: '5월', value: 16120, target: 15500 },
+      { month: '6월', value: 18360, target: 17000 },
+      { month: '7월', value: 19180, target: 17500 },
+      { month: '8월', value: 18640, target: 18000 },
+      { month: '9월', value: 15790, target: 16000 },
+      { month: '10월', value: 14960, target: 15500 },
+      { month: '11월', value: 13380, target: 14500 },
+      { month: '12월', value: 13790, target: 14000 },
+    ];
+
+    const ctx = document.getElementById('lineChart').getContext('2d');
+    const canvas = ctx.canvas;
+    const w = canvas.width, h = canvas.height;
+    const pad = { l: 52, r: 20, t: 20, b: 44 };
+    const plotW = w - pad.l - pad.r;
+    const plotH = h - pad.t - pad.b;
+    const maxVal = Math.max(...monthlyData.map(d => d.value)) * 1.12;
+    const minVal = 0;
+
+    function x(i) { return pad.l + (plotW / (monthlyData.length - 1)) * i; }
+    function y(v) { return pad.t + plotH - ((v - minVal) / (maxVal - minVal)) * plotH; }
+
+    function drawGrid() {
+      ctx.clearRect(0, 0, w, h);
+      ctx.fillStyle = '#07101d';
+      ctx.fillRect(0, 0, w, h);
+      ctx.strokeStyle = 'rgba(148,163,184,0.15)';
+      ctx.lineWidth = 1;
+      for (let i = 0; i <= 4; i++) {
+        const gy = pad.t + (plotH / 4) * i;
+        ctx.beginPath();
+        ctx.moveTo(pad.l, gy);
+        ctx.lineTo(w - pad.r, gy);
+        ctx.stroke();
+        ctx.fillStyle = '#94a3b8';
+        ctx.font = '12px system-ui';
+        ctx.textAlign = 'right';
+        ctx.fillText(Math.round(maxVal - ((maxVal - minVal) / 4) * i).toLocaleString(), pad.l - 10, gy + 4);
+      }
+    }
+
+    function drawLine() {
+      const grad = ctx.createLinearGradient(0, pad.t, 0, h - pad.b);
+      grad.addColorStop(0, 'rgba(251,191,36,0.28)');
+      grad.addColorStop(1, 'rgba(56,189,248,0.03)');
+      ctx.beginPath();
+      monthlyData.forEach((d, i) => {
+        const px = x(i), py = y(d.value);
+        if (i === 0) ctx.moveTo(px, py);
+        else ctx.lineTo(px, py);
+      });
+      ctx.lineTo(x(monthlyData.length - 1), h - pad.b);
+      ctx.lineTo(x(0), h - pad.b);
+      ctx.closePath();
+      ctx.fillStyle = grad;
+      ctx.fill();
+
+      const lineGrad = ctx.createLinearGradient(pad.l, 0, w - pad.r, 0);
+      lineGrad.addColorStop(0, '#fbbf24');
+      lineGrad.addColorStop(1, '#38bdf8');
+      ctx.beginPath();
+      monthlyData.forEach((d, i) => {
+        const px = x(i), py = y(d.value);
+        if (i === 0) ctx.moveTo(px, py);
+        else ctx.lineTo(px, py);
+      });
+      ctx.strokeStyle = lineGrad;
+      ctx.lineWidth = 4;
+      ctx.stroke();
+
+      monthlyData.forEach((d, i) => {
+        const px = x(i), py = y(d.value);
+        ctx.beginPath();
+        ctx.arc(px, py, 5.5, 0, Math.PI * 2);
+        ctx.fillStyle = '#f8fafc';
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(px, py, 3.2, 0, Math.PI * 2);
+        ctx.fillStyle = '#fbbf24';
+        ctx.fill();
+        ctx.fillStyle = '#e2e8f0';
+        ctx.font = '12px system-ui';
+        ctx.textAlign = 'center';
+        ctx.fillText(d.month, px, h - 18);
+      });
+    }
+
+    function fillTable() {
+      const tbody = document.getElementById('monthlyTable');
+      tbody.innerHTML = monthlyData.map((d, i) => {
+        const prev = i === 0 ? null : monthlyData[i - 1].value;
+        const diff = prev ? ((d.value - prev) / prev) * 100 : 0;
+        const attainment = (d.value / d.target) * 100;
+        return `<tr>
+          <td>${d.month}</td>
+          <td>${d.value.toLocaleString()} kWh</td>
+          <td style="color:${diff >= 0 ? '#86efac' : '#fca5a5'}">${i === 0 ? '-' : (diff >= 0 ? '+' : '') + diff.toFixed(1) + '%'}</td>
+          <td>
+            <div style="display:flex;align-items:center;gap:10px;">
+              <div class="bar" style="flex:1"><div style="width:${Math.min(attainment, 100).toFixed(1)}%"></div></div>
+              <span>${attainment.toFixed(0)}%</span>
+            </div>
+          </td>
+        </tr>`;
+      }).join('');
+
+      const el = document.getElementById('efficiencyBars');
+      el.innerHTML = monthlyData.map(d => {
+        const attainment = (d.value / d.target) * 100;
+        return `<div class="list-item">
+          <div><strong>${d.month}</strong><span>목표 ${d.target.toLocaleString()} kWh 대비</span></div>
+          <strong>${attainment.toFixed(0)}%</strong>
+        </div>`;
+      }).join('');
+    }
+
+    drawGrid();
+    drawLine();
+    fillTable();
+  </script>
+</body>
+</html>

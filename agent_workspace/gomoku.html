@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>오목</title>
+  <style>
+    :root {
+      --bg: #f3d9a4;
+      --line: #6b4f2a;
+      --black: #1a1a1a;
+      --white: #f5f5f5;
+      --accent: #2f6fed;
+    }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: linear-gradient(180deg, #f7f1e1, #e9d3a3);
+      color: #222;
+    }
+    .wrap {
+      width: min(92vw, 760px);
+      text-align: center;
+    }
+    h1 { margin: 0 0 12px; }
+    .toolbar {
+      display: flex;
+      justify-content: center;
+      gap: 12px;
+      align-items: center;
+      margin-bottom: 14px;
+      flex-wrap: wrap;
+    }
+    button {
+      border: 0;
+      background: var(--accent);
+      color: white;
+      padding: 10px 14px;
+      border-radius: 10px;
+      font-size: 15px;
+      cursor: pointer;
+    }
+    button:hover { filter: brightness(0.95); }
+    .status {
+      font-weight: 700;
+      padding: 8px 12px;
+      background: rgba(255,255,255,0.55);
+      border-radius: 999px;
+    }
+    canvas {
+      width: 100%;
+      height: auto;
+      background: var(--bg);
+      border-radius: 18px;
+      box-shadow: 0 14px 40px rgba(0,0,0,0.18);
+      touch-action: manipulation;
+      user-select: none;
+    }
+    .note { margin-top: 10px; font-size: 14px; opacity: 0.8; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>오목</h1>
+    <div class="toolbar">
+      <button id="resetBtn">다시 시작</button>
+      <div class="status" id="status">흑돌 차례</div>
+    </div>
+    <canvas id="board" width="720" height="720"></canvas>
+    <div class="note">빈 교차점 클릭/터치로 돌을 놓을 수 있습니다.</div>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('board');
+    const ctx = canvas.getContext('2d');
+    const statusEl = document.getElementById('status');
+    const resetBtn = document.getElementById('resetBtn');
+
+    const SIZE = 15;
+    const CELL = canvas.width / (SIZE + 1);
+    const MARGIN = CELL;
+    const R = CELL * 0.38;
+
+    let board, turn, gameOver;
+
+    function resetGame() {
+      board = Array.from({ length: SIZE }, () => Array(SIZE).fill(0));
+      turn = 1;
+      gameOver = false;
+      statusEl.textContent = '흑돌 차례';
+      draw();
+    }
+
+    function draw() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // board background
+      ctx.fillStyle = '#f3d9a4';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // grid lines
+      ctx.strokeStyle = '#6b4f2a';
+      ctx.lineWidth = 2;
+      for (let i = 0; i < SIZE; i++) {
+        const p = MARGIN + i * CELL;
+        ctx.beginPath();
+        ctx.moveTo(MARGIN, p);
+        ctx.lineTo(canvas.width - MARGIN, p);
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.moveTo(p, MARGIN);
+        ctx.lineTo(p, canvas.height - MARGIN);
+        ctx.stroke();
+      }
+
+      // star points
+      const stars = [3, 7, 11];
+      ctx.fillStyle = '#6b4f2a';
+      for (const y of stars) {
+        for (const x of stars) {
+          drawDot(MARGIN + x * CELL, MARGIN + y * CELL, 5);
+        }
+      }
+
+      // stones
+      for (let y = 0; y < SIZE; y++) {
+        for (let x = 0; x < SIZE; x++) {
+          if (board[y][x] !== 0) drawStone(x, y, board[y][x]);
+        }
+      }
+    }
+
+    function drawDot(x, y, r) {
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    function drawStone(x, y, player) {
+      const cx = MARGIN + x * CELL;
+      const cy = MARGIN + y * CELL;
+      ctx.beginPath();
+      ctx.arc(cx, cy, R, 0, Math.PI * 2);
+      const grad = ctx.createRadialGradient(cx - R * 0.3, cy - R * 0.3, R * 0.2, cx, cy, R);
+      if (player === 1) {
+        grad.addColorStop(0, '#666');
+        grad.addColorStop(1, '#111');
+      } else {
+        grad.addColorStop(0, '#fff');
+        grad.addColorStop(1, '#dcdcdc');
+      }
+      ctx.fillStyle = grad;
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(0,0,0,0.25)';
+      ctx.stroke();
+    }
+
+    function getCellFromEvent(e) {
+      const rect = canvas.getBoundingClientRect();
+      const scaleX = canvas.width / rect.width;
+      const scaleY = canvas.height / rect.height;
+      const x = (e.clientX - rect.left) * scaleX;
+      const y = (e.clientY - rect.top) * scaleY;
+      const gx = Math.round((x - MARGIN) / CELL);
+      const gy = Math.round((y - MARGIN) / CELL);
+      if (gx < 0 || gx >= SIZE || gy < 0 || gy >= SIZE) return null;
+      const px = MARGIN + gx * CELL;
+      const py = MARGIN + gy * CELL;
+      if (Math.hypot(x - px, y - py) > CELL * 0.45) return null;
+      return { gx, gy };
+    }
+
+    function checkWin(x, y, player) {
+      const dirs = [
+        [1, 0], [0, 1], [1, 1], [1, -1]
+      ];
+      for (const [dx, dy] of dirs) {
+        let count = 1;
+        for (let s = 1; s < 5; s++) {
+          const nx = x + dx * s, ny = y + dy * s;
+          if (nx < 0 || nx >= SIZE || ny < 0 || ny >= SIZE || board[ny][nx] !== player) break;
+          count++;
+        }
+        for (let s = 1; s < 5; s++) {
+          const nx = x - dx * s, ny = y - dy * s;
+          if (nx < 0 || nx >= SIZE || ny < 0 || ny >= SIZE || board[ny][nx] !== player) break;
+          count++;
+        }
+        if (count >= 5) return true;
+      }
+      return false;
+    }
+
+    function handleMove(e) {
+      if (gameOver) return;
+      const cell = getCellFromEvent(e);
+      if (!cell) return;
+      const { gx, gy } = cell;
+      if (board[gy][gx] !== 0) return;
+
+      board[gy][gx] = turn;
+      draw();
+
+      if (checkWin(gx, gy, turn)) {
+        gameOver = true;
+        statusEl.textContent = turn === 1 ? '흑돌 승리!' : '백돌 승리!';
+        return;
+      }
+
+      turn = turn === 1 ? 2 : 1;
+      statusEl.textContent = turn === 1 ? '흑돌 차례' : '백돌 차례';
+    }
+
+    canvas.addEventListener('click', handleMove);
+    canvas.addEventListener('touchstart', (e) => {
+      e.preventDefault();
+      handleMove(e.touches[0]);
+    }, { passive: false });
+    resetBtn.addEventListener('click', resetGame);
+
+    resetGame();
+  </script>
+</body>
+</html>

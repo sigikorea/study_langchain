@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>투자 주체 A/B/H 비교 대시보드</title>
+  <style>
+    :root {
+      --bg: #07111f;
+      --panel: rgba(15, 23, 42, 0.9);
+      --panel-2: rgba(30, 41, 59, 0.86);
+      --line: rgba(148, 163, 184, 0.18);
+      --text: #e2e8f0;
+      --muted: #94a3b8;
+      --accent: #38bdf8;
+      --accent-2: #fbbf24;
+      --good: #22c55e;
+      --warn: #f97316;
+      --bad: #ef4444;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(circle at top left, rgba(56,189,248,0.15), transparent 28%),
+        radial-gradient(circle at top right, rgba(251,191,36,0.12), transparent 24%),
+        linear-gradient(180deg, #050b14 0%, #07111f 100%);
+      min-height: 100vh;
+    }
+    .container {
+      width: min(1450px, 94vw);
+      margin: 0 auto;
+      padding: 28px 0 40px;
+    }
+    .card {
+      background: linear-gradient(180deg, rgba(15,23,42,0.94), rgba(17,24,39,0.94));
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      box-shadow: 0 18px 50px rgba(0,0,0,0.28);
+      backdrop-filter: blur(8px);
+    }
+    .hero { display: grid; grid-template-columns: 1.4fr 0.6fr; gap: 18px; margin-bottom: 18px; }
+    .hero-main, .hero-side, .section, .metric, .chart, .table-wrap { padding: 22px; }
+    h1, h2, h3, p { margin: 0; }
+    .title { font-size: clamp(28px, 3vw, 44px); line-height: 1.1; margin-bottom: 12px; }
+    .subtitle { color: var(--muted); line-height: 1.65; max-width: 76ch; }
+    .badge-row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 18px; }
+    .badge {
+      padding: 8px 12px; border-radius: 999px; background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(255,255,255,0.08); font-size: 13px; color: #f8fafc;
+    }
+    .hero-side { display: grid; gap: 14px; align-content: start; }
+    .hero-side .list-item,
+    .section .list-item {
+      display: flex; justify-content: space-between; gap: 12px; padding: 14px 16px;
+      border-radius: 14px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.06);
+    }
+    .hero-side .list-item span,
+    .section .list-item span { color: var(--muted); font-size: 13px; display: block; margin-top: 4px; }
+    .metric-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin: 18px 0; }
+    .metric h3 { font-size: 14px; color: var(--muted); margin-bottom: 12px; font-weight: 600; }
+    .metric .value { font-size: 28px; font-weight: 800; letter-spacing: -0.02em; }
+    .metric .unit { font-size: 13px; color: var(--muted); margin-left: 4px; }
+    .metric .delta { margin-top: 10px; font-size: 13px; color: #cbd5e1; }
+    .delta.up { color: #86efac; }
+    .delta.down { color: #fca5a5; }
+    .dashboard { display: grid; grid-template-columns: 2fr 1fr; gap: 18px; margin-top: 18px; }
+    .section-title { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 14px; }
+    .section-title .small { color: var(--muted); font-size: 13px; }
+    .chart { min-height: 420px; }
+    .chart-box {
+      margin-top: 10px; position: relative; height: 320px; border-radius: 16px;
+      background: rgba(2,6,23,0.45); border: 1px solid var(--line); padding: 16px;
+    }
+    canvas { width: 100%; height: 100%; display: block; }
+    .list { display: grid; gap: 12px; margin-top: 8px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 14px; }
+    th, td { padding: 12px 10px; border-bottom: 1px solid rgba(148,163,184,0.16); text-align: left; }
+    th { color: #cbd5e1; font-weight: 700; }
+    td { color: #e2e8f0; }
+    .bar { height: 10px; border-radius: 999px; background: rgba(255,255,255,0.08); overflow: hidden; }
+    .bar > div { height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--accent), #7dd3fc); }
+    .filters {
+      display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-top: 16px;
+    }
+    .filter {
+      padding: 14px 16px; border-radius: 16px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.06);
+    }
+    .filter label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 8px; }
+    .filter select {
+      width: 100%; padding: 10px 12px; border-radius: 12px; border: 1px solid rgba(148,163,184,0.22);
+      background: rgba(15,23,42,0.95); color: var(--text);
+    }
+    .legend { display:flex; gap:10px; flex-wrap:wrap; margin-top: 10px; }
+    .legend-item { display:flex; align-items:center; gap:8px; color:#cbd5e1; font-size:13px; }
+    .dot { width:10px; height:10px; border-radius:999px; display:inline-block; }
+    .footer-note { margin-top: 14px; color: var(--muted); font-size: 13px; }
+    @media (max-width: 1100px) { .hero, .dashboard, .metric-grid, .filters { grid-template-columns: 1fr; } .chart { min-height: 380px; } }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <section class="hero">
+      <div class="card hero-main">
+        <h1 class="title">투자 주체 A / B / H 비교 대시보드</h1>
+        <p class="subtitle">
+          현재는 투자 주체별 엑셀 파일을 읽어 <b>ticker(A열) / stock name(B열) / trading amount(H열)</b> 기준으로
+          종목을 검색해 비교하는 예시 화면입니다. 브라우저에서 실제 .xlsx를 직접 파싱하지 않고,
+          이 파일에 내장된 샘플 데이터로 동작하는 정적 데모 방식입니다.
+        </p>
+        <div class="badge-row">
+          <div class="badge">데이터 소스: /sample_data/*.xlsx</div>
+          <div class="badge">열 매핑: A=ticker, B=stock name, H=trading amount</div>
+          <div class="badge">파일명 = investor type</div>
+          <div class="badge">현재 목적: 종목별 투자 주체 비교</div>
+        </div>
+        <div class="filters">
+          <div class="filter">
+            <label for="tickerInput">티커(A열) 또는 종목명(B열)</label>
+            <input id="tickerInput" type="text" placeholder="예: 005930 또는 삼성전자" style="width:100%;padding:10px 12px;border-radius:12px;border:1px solid rgba(148,163,184,0.22);background:rgba(15,23,42,0.95);color:var(--text);" />
+          </div>
+          <div class="filter">
+            <label for="metricSelect">표시 지표</label>
+            <select id="metricSelect">
+              <option value="value">절대값</option>
+              <option value="ratio">비중(%)</option>
+            </select>
+          </div>
+          <div class="filter">
+            <label for="viewSelect">보기</label>
+            <select id="viewSelect">
+              <option value="bar">막대 비교</option>
+              <option value="table">상세 표</option>
+            </select>
+          </div>
+        </div>
+      </div>
+      <div class="card hero-side">
+        <div>
+          <h3 style="margin-bottom:8px;">현재 화면 설명</h3>
+          <p class="subtitle" style="font-size:14px;">기관 / 사모 / 외국인 / 투신 파일을 같은 구조로 비교하는 것을 전제로 한 예시입니다.</p>
+        </div>
+        <div class="list-item"><div><strong>Ticker</strong><span>A열 기준 종목 코드</span></div><strong id="summaryA">-</strong></div>
+        <div class="list-item"><div><strong>Stock name</strong><span>B열 기준 종목명</span></div><strong id="summaryB">-</strong></div>
+        <div class="list-item"><div><strong>Trading amount</strong><span>H열 기준 거래금액</span></div><strong id="summaryH">-</strong></div>
+      </div>
+    </section>
+
+    <section class="metric-grid">
+      <div class="card metric"><h3>비교 대상 파일 수</h3><div class="value">4<span class="unit">개</span></div><div class="delta up">기관 / 사모 / 외국인 / 투신</div></div>
+      <div class="card metric"><h3>현재 집계 대상</h3><div class="value">3<span class="unit">열</span></div><div class="delta up">A, B, H 기준</div></div>
+      <div class="card metric"><h3>향후 확장성</h3><div class="value">날짜<span class="unit">추이</span></div><div class="delta up">시계열 연결 준비</div></div>
+      <div class="card metric"><h3>표시 방식</h3><div class="value">2<span class="unit">종</span></div><div class="delta">막대 / 표</div></div>
+    </section>
+
+    <section class="dashboard">
+      <div class="card chart" id="chartCard">
+        <div class="section-title">
+          <div>
+            <h2 id="chartTitle">A/B/H 비교 막대 차트</h2>
+            <div class="small" id="chartSubtitle">선택한 종목을 투자 주체별 파일에서 비교합니다.</div>
+          </div>
+          <div class="small" id="chartUnit">단위: 값</div>
+        </div>
+        <div class="chart-box"><canvas id="mainChart" width="900" height="320"></canvas></div>
+        <div class="legend">
+          <div class="legend-item"><span class="dot" style="background:#38bdf8"></span>A</div>
+          <div class="legend-item"><span class="dot" style="background:#fbbf24"></span>B</div>
+          <div class="legend-item"><span class="dot" style="background:#22c55e"></span>H</div>
+        </div>
+      </div>
+      <div class="card section" id="sidePanel">
+        <div class="section-title">
+          <div>
+            <h2>핵심 해석 포인트</h2>
+            <div class="small">현재는 샘플 구조에 맞춘 설명용 패널</div>
+          </div>
+        </div>
+        <div class="list" id="insightList"></div>
+        <div class="footer-note">※ 실제 값이 연결되면 이 영역을 투자 주체별 코멘트와 이상치 탐지로 확장할 수 있습니다.</div>
+      </div>
+    </section>
+
+    <section class="dashboard" id="tableSection">
+      <div class="card section">
+        <div class="section-title">
+          <div>
+            <h2>상세 데이터</h2>
+            <div class="small">A/B/H 기준 비교용 테이블</div>
+          </div>
+        </div>
+        <table>
+          <thead>
+            <tr><th>항목</th><th>A</th><th>B</th><th>H</th><th>비고</th></tr>
+          </thead>
+          <tbody id="detailTable"></tbody>
+        </table>
+      </div>
+      <div class="card section">
+        <div class="section-title">
+          <div>
+            <h2>추후 확장 구조</h2>
+            <div class="small">날짜 축을 추가하면 바로 시계열 대시보드로 확장 가능</div>
+          </div>
+        </div>
+        <div class="list">
+          <div class="list-item"><div><strong>필수 컬럼</strong><span>date, investor_type, A, B, H</span></div><strong>권장</strong></div>
+          <div class="list-item"><div><strong>추이 차트</strong><span>라인 차트 / 누적 영역 차트</span></div><strong>가능</strong></div>
+          <div class="list-item"><div><strong>비교 필터</strong><span>기간, 주체, 종목/구간 필터</span></div><strong>확장</strong></div>
+          <div class="list-item"><div><strong>드릴다운</strong><span>일별 → 주별 → 월별 전환</span></div><strong>추천</strong></div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    const datasets = {
+      "기관": [
+        { ticker: "005930", name: "삼성전자", amount: 156 },
+        { ticker: "000660", name: "SK하이닉스", amount: 161 },
+        { ticker: "035420", name: "NAVER", amount: 149 },
+        { ticker: "207940", name: "삼성바이오로직스", amount: 172 },
+      ],
+      "사모": [
+        { ticker: "005930", name: "삼성전자", amount: 105 },
+        { ticker: "000660", name: "SK하이닉스", amount: 118 },
+        { ticker: "035420", name: "NAVER", amount: 126 },
+        { ticker: "207940", name: "삼성바이오로직스", amount: 121 },
+      ],
+      "외국인": [
+        { ticker: "005930", name: "삼성전자", amount: 190 },
+        { ticker: "000660", name: "SK하이닉스", amount: 184 },
+        { ticker: "035420", name: "NAVER", amount: 198 },
+        { ticker: "207940", name: "삼성바이오로직스", amount: 186 },
+      ],
+      "투신": [
+        { ticker: "005930", name: "삼성전자", amount: 78 },
+        { ticker: "000660", name: "SK하이닉스", amount: 84 },
+        { ticker: "035420", name: "NAVER", amount: 82 },
+        { ticker: "207940", name: "삼성바이오로직스", amount: 90 },
+      ]
+    };
+
+    const colors = { A: '#38bdf8', B: '#fbbf24', H: '#22c55e' };
+    const tickerInput = document.getElementById('tickerInput');
+    const metricSelect = document.getElementById('metricSelect');
+    const viewSelect = document.getElementById('viewSelect');
+    const tbody = document.getElementById('detailTable');
+    const insightList = document.getElementById('insightList');
+    const chartTitle = document.getElementById('chartTitle');
+    const chartSubtitle = document.getElementById('chartSubtitle');
+    const chartUnit = document.getElementById('chartUnit');
+    const canvas = document.getElementById('mainChart');
+    const ctx = canvas.getContext('2d');
+
+    function matchedRows() {
+      const q = tickerInput.value.trim().toLowerCase();
+      return Object.entries(datasets).map(([type, rows]) => ({
+        type,
+        rows: q ? rows.filter(row => row.ticker.toLowerCase().includes(q) || row.name.toLowerCase().includes(q)) : rows
+      })).filter(group => group.rows.length);
+    }
+
+    function lookupAmount(type, ticker) {
+      return datasets[type].find(row => row.ticker === ticker)?.amount ?? 0;
+    }
+
+    function renderSummary() {
+      const groups = matchedRows();
+      document.getElementById('summaryA').textContent = (groups[0]?.rows.length ?? 0).toLocaleString();
+      document.getElementById('summaryB').textContent = Object.values(datasets).flat().length.toLocaleString();
+      document.getElementById('summaryH').textContent = Object.keys(datasets).length.toLocaleString();
+    }
+
+    function renderTable() {
+      const groups = matchedRows();
+      const seen = new Map();
+      groups.forEach(({ rows }) => rows.forEach(row => seen.set(row.ticker, row)));
+      tbody.innerHTML = [...seen.values()].map(row => {
+        const values = Object.fromEntries(Object.keys(datasets).map(type => [type, lookupAmount(type, row.ticker)]));
+        return `<tr><td>${row.ticker}</td><td>${row.name}</td><td>${values['기관'].toLocaleString()}</td><td>${values['사모'].toLocaleString()}</td><td>${values['외국인'].toLocaleString()}</td><td>${values['투신'].toLocaleString()}</td></tr>`;
+      }).join('');
+    }
+
+    function renderInsights() {
+      const q = tickerInput.value.trim();
+      const groups = matchedRows();
+      const totals = Object.fromEntries(Object.keys(datasets).map(type => [type, datasets[type].reduce((sum, row) => sum + row.amount, 0)]));
+      const topType = Object.entries(totals).sort((a, b) => b[1] - a[1])[0]?.[0] ?? '-';
+      insightList.innerHTML = [
+        { title: '검색어', desc: '티커 또는 종목명 기준으로 필터링합니다.', value: q || '전체' },
+        { title: '매칭 종목 수', desc: '투자 주체 파일 전체에서 찾은 종목 개수입니다.', value: `${groups[0]?.rows.length ?? 0}` },
+        { title: '최대 파일', desc: '전체 샘플 합계 기준 가장 큰 투자 주체입니다.', value: topType },
+      ].map(item => `<div class="list-item"><div><strong>${item.title}</strong><span>${item.desc}</span></div><strong>${item.value}</strong></div>`).join('');
+    }
+
+    function drawChart() {
+      const groups = matchedRows();
+      const rows = groups[0]?.rows ?? [];
+      const w = canvas.width, h = canvas.height;
+      ctx.clearRect(0, 0, w, h);
+      ctx.fillStyle = '#07101d';
+      ctx.fillRect(0, 0, w, h);
+      const pad = { l: 52, r: 24, t: 20, b: 44 };
+      const plotW = w - pad.l - pad.r;
+      const plotH = h - pad.t - pad.b;
+      const maxVal = Math.max(1, ...Object.values(datasets).flatMap(rows => rows.map(r => r.amount)));
+      const groupW = plotW / Math.max(rows.length, 1);
+      const barW = 18;
+
+      ctx.strokeStyle = 'rgba(148,163,184,0.14)';
+      for (let i = 0; i <= 4; i++) {
+        const gy = pad.t + (plotH / 4) * i;
+        ctx.beginPath(); ctx.moveTo(pad.l, gy); ctx.lineTo(w - pad.r, gy); ctx.stroke();
+      }
+      rows.forEach((row, i) => {
+        const baseX = pad.l + groupW * i + groupW * 0.25;
+        Object.keys(datasets).forEach((type, j) => {
+          const value = lookupAmount(type, row.ticker);
+          const barH = (value / maxVal) * plotH;
+          const x = baseX + j * 28;
+          const y = pad.t + plotH - barH;
+          ctx.fillStyle = ['#38bdf8','#fbbf24','#22c55e','#f97316'][j];
+          ctx.fillRect(x, y, barW, barH);
+        });
+        ctx.fillStyle = '#cbd5e1';
+        ctx.font = '12px system-ui';
+        ctx.textAlign = 'center';
+        ctx.fillText(`${row.ticker} ${row.name}`, pad.l + groupW * i + groupW / 2, h - 4);
+      });
+    }
+
+    function render() {
+      chartTitle.textContent = '투자 주체별 종목 거래금액 비교';
+      chartSubtitle.textContent = tickerInput.value.trim()
+        ? `"${tickerInput.value.trim()}"에 대한 투자 주체별 비교 결과입니다.`
+        : '티커(A열) 또는 종목명(B열)으로 검색하면 각 investor type 파일을 비교합니다.';
+      chartUnit.textContent = '단위: trading amount';
+      document.getElementById('chartCard').style.display = viewSelect.value === 'table' ? 'none' : 'block';
+      renderSummary();
+      renderTable();
+      renderInsights();
+      drawChart();
+    }
+
+    tickerInput.addEventListener('input', render);
+    metricSelect.addEventListener('change', render);
+    viewSelect.addEventListener('change', render);
+    render();
+  </script>
+</body>
+</html>

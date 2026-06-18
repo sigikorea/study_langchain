@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>플래시 피하기 게임</title>
+  <style>
+    :root {
+      --bg1: #101828;
+      --bg2: #1d4ed8;
+      --accent: #22c55e;
+      --danger: #ef4444;
+      --text: #f8fafc;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: radial-gradient(circle at top, #334155, var(--bg1));
+      color: var(--text);
+    }
+    .wrap {
+      width: min(92vw, 720px);
+      text-align: center;
+    }
+    h1 { margin: 0 0 10px; }
+    .panel {
+      display: flex;
+      justify-content: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-bottom: 14px;
+      align-items: center;
+    }
+    .pill {
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.12);
+      backdrop-filter: blur(6px);
+      font-weight: 700;
+    }
+    button {
+      border: 0;
+      background: var(--accent);
+      color: #06240f;
+      padding: 10px 14px;
+      border-radius: 10px;
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    button:hover { filter: brightness(0.95); }
+    canvas {
+      width: 100%;
+      aspect-ratio: 1 / 1;
+      background: linear-gradient(180deg, #0f172a, #111827);
+      border-radius: 18px;
+      box-shadow: 0 18px 50px rgba(0,0,0,0.35);
+      touch-action: none;
+      user-select: none;
+      display: block;
+    }
+    .note { margin-top: 10px; opacity: 0.8; font-size: 14px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>플래시 피하기 게임</h1>
+    <div class="panel">
+      <button id="startBtn">시작 / 재시작</button>
+      <div class="pill" id="status">대기 중</div>
+      <div class="pill" id="score">점수: 0</div>
+    </div>
+    <canvas id="game" width="640" height="640"></canvas>
+    <div class="note">파란 원을 터치/클릭해서 움직이고, 빨간 플래시를 피하세요.</div>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('game');
+    const ctx = canvas.getContext('2d');
+    const statusEl = document.getElementById('status');
+    const scoreEl = document.getElementById('score');
+    const startBtn = document.getElementById('startBtn');
+
+    const W = canvas.width;
+    const H = canvas.height;
+
+    let player, danger, score, running, gameOver, flashTime, flashActive;
+    let lastTs = 0;
+
+    function resetGame() {
+      player = { x: W / 2, y: H - 70, r: 18 };
+      danger = { x: 80, y: 80, vx: 3.2, vy: 2.7, r: 16 };
+      score = 0;
+      running = true;
+      gameOver = false;
+      flashTime = 0;
+      flashActive = false;
+      statusEl.textContent = '진행 중';
+      scoreEl.textContent = '점수: 0';
+      lastTs = 0;
+      requestAnimationFrame(loop);
+    }
+
+    function drawBackground() {
+      const g = ctx.createLinearGradient(0, 0, 0, H);
+      g.addColorStop(0, '#0f172a');
+      g.addColorStop(1, '#111827');
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, W, H);
+    }
+
+    function drawPlayer() {
+      ctx.beginPath();
+      ctx.arc(player.x, player.y, player.r, 0, Math.PI * 2);
+      ctx.fillStyle = '#38bdf8';
+      ctx.fill();
+      ctx.strokeStyle = '#e0f2fe';
+      ctx.lineWidth = 3;
+      ctx.stroke();
+    }
+
+    function drawDanger() {
+      ctx.beginPath();
+      ctx.arc(danger.x, danger.y, danger.r, 0, Math.PI * 2);
+      ctx.fillStyle = flashActive ? '#f8fafc' : '#ef4444';
+      ctx.fill();
+      ctx.strokeStyle = '#fecaca';
+      ctx.lineWidth = 3;
+      ctx.stroke();
+    }
+
+    function drawOverlay() {
+      if (!gameOver) return;
+      ctx.fillStyle = 'rgba(0,0,0,0.55)';
+      ctx.fillRect(0, 0, W, H);
+      ctx.fillStyle = '#fff';
+      ctx.font = 'bold 42px system-ui, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('게임 오버', W / 2, H / 2 - 10);
+      ctx.font = '20px system-ui, sans-serif';
+      ctx.fillText('점수: ' + score, W / 2, H / 2 + 28);
+    }
+
+    function clamp(v, min, max) {
+      return Math.max(min, Math.min(max, v));
+    }
+
+    function handlePointer(e) {
+      const rect = canvas.getBoundingClientRect();
+      const x = (e.clientX - rect.left) * (canvas.width / rect.width);
+      const y = (e.clientY - rect.top) * (canvas.height / rect.height);
+      const dx = x - player.x;
+      const dy = y - player.y;
+      if (Math.hypot(dx, dy) <= player.r + 10) {
+        player.x = x;
+        player.y = y;
+      }
+    }
+
+    function update(dt) {
+      if (!running) return;
+
+      danger.x += danger.vx;
+      danger.y += danger.vy;
+
+      if (danger.x < danger.r || danger.x > W - danger.r) danger.vx *= -1;
+      if (danger.y < danger.r || danger.y > H - danger.r) danger.vy *= -1;
+
+      flashTime += dt;
+      if (flashTime > 700) {
+        flashTime = 0;
+        flashActive = true;
+        setTimeout(() => flashActive = false, 120);
+      }
+
+      score += dt / 1000;
+      scoreEl.textContent = '점수: ' + Math.floor(score);
+
+      const hit = Math.hypot(player.x - danger.x, player.y - danger.y) < player.r + danger.r;
+      if (hit) {
+        running = false;
+        gameOver = true;
+        statusEl.textContent = '실패';
+      }
+    }
+
+    function render() {
+      drawBackground();
+      drawPlayer();
+      drawDanger();
+      drawOverlay();
+    }
+
+    function loop(ts) {
+      if (!lastTs) lastTs = ts;
+      const dt = ts - lastTs;
+      lastTs = ts;
+      update(dt);
+      render();
+      if (running) requestAnimationFrame(loop);
+    }
+
+    canvas.addEventListener('pointerdown', handlePointer);
+    startBtn.addEventListener('click', resetGame);
+
+    render();
+  </script>
+</body>
+</html>

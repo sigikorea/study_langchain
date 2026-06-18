@@ -16,6 +16,9 @@ from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 import json
 import csv
 import io
+import ast
+import re
+import pandas as pd
 import xlwings as xw
 import tempfile
 import os as os_module
@@ -268,6 +271,78 @@ else:  # Edit 탭
             
             if st.session_state.uploaded_file_content:
                 st.text_area("파일 내용 미리보기", st.session_state.uploaded_file_content, height=250, disabled=True)
+
+                # 여러 sheet 블록이 있는지 검사하고, 있으면 sheet별로 expander에 표시
+                content_text = st.session_state.uploaded_file_content
+                sheet_blocks = re.findall(r"## Sheet: (.*?)\n```\n(.*?)\n```", content_text, flags=re.S)
+                sheets_parsed = {}
+
+                if sheet_blocks:
+                    for sheet_name, block_text in sheet_blocks:
+                        df = None
+                        code_text = block_text
+
+                        # 1) Python literal 형식 파싱 시도
+                        try:
+                            obj = ast.literal_eval(code_text.strip())
+                            if isinstance(obj, (list, tuple)) and len(obj) > 0:
+                                header = obj[0]
+                                rows = obj[1:]
+                                if isinstance(header, (list, tuple)):
+                                    df = pd.DataFrame(rows, columns=header)
+                                else:
+                                    df = pd.DataFrame(obj)
+                        except Exception:
+                            df = None
+
+                        # 2) CSV 형식 파싱 시도
+                        if df is None:
+                            try:
+                                from io import StringIO
+                                df = pd.read_csv(StringIO(code_text))
+                            except Exception:
+                                df = None
+
+                        with st.expander(f"Sheet: {sheet_name}"):
+                            if df is not None:
+                                st.dataframe(df)
+                                sheets_parsed[sheet_name] = df
+                            else:
+                                st.text_area(f"{sheet_name} 내용", code_text, height=200, disabled=True)
+
+                    if sheets_parsed:
+                        st.session_state.uploaded_file_df = sheets_parsed
+                else:
+                    # 단일 블록(또는 CSV 텍스트)인 경우 기존 처리 재사용
+                    parsed_df = None
+                    m = re.search(r"```\n(.*)\n```", content_text, flags=re.S)
+                    code_text = m.group(1) if m else content_text
+
+                    try:
+                        obj = ast.literal_eval(code_text.strip())
+                        if isinstance(obj, (list, tuple)) and len(obj) > 0:
+                            header = obj[0]
+                            rows = obj[1:]
+                            if isinstance(header, (list, tuple)):
+                                parsed_df = pd.DataFrame(rows, columns=header)
+                            else:
+                                parsed_df = pd.DataFrame(obj)
+                    except Exception:
+                        parsed_df = None
+
+                    if parsed_df is None:
+                        try:
+                            from io import StringIO
+                            parsed_df = pd.read_csv(StringIO(code_text))
+                        except Exception:
+                            parsed_df = None
+
+                    if parsed_df is not None:
+                        st.session_state.uploaded_file_df = parsed_df
+                        st.subheader("테이블 보기")
+                        st.dataframe(parsed_df)
+                    else:
+                        st.info("테이블로 변환할 수 없습니다. 텍스트 미리보기를 확인하세요.")
         
         finally:
             # 임시 파일 삭제
